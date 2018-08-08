@@ -1,0 +1,19 @@
+language: scala
+sbt_args: 
+   -sbt-version 1.0.0
+scala:
+   - 2.11.6
+   - 2.12.3
+script:
+  - mkdir output
+  - sbt clean
+  - sbt update
+  - sbt compile
+  - sbt test
+  - sbt clean coverage test coverageReport
+jdk:
+  - oraclejdk7
+notifications:
+  slack: kaspect:ZDGGbLyDsPguWyRxpcrkpqQa
+after_success:
+  - bash <(curl -s https://codecov.io/bash) -t e1fe6099-5a0b-49a8-afd6-8d4b8b5a7d0f

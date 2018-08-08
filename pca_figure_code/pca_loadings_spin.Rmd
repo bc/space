@@ -1,0 +1,160 @@
+---
+title: "PCA loadings spin"
+runtime: shiny
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(shiny)
+knitr::opts_chunk$set(echo = TRUE)
+	library(gridExtra)
+library(MASS)
+source('pca_analysis.R')
+```
+
+
+```{r, echo=FALSE}
+main <- function(){
+
+	blank_col_hitrun_data <- lapply(csv_filename_list(), read.csv, header=FALSE)
+	list_of_hitrun_dataframes <- lapply(blank_col_hitrun_data, add_finger_muscle_name_cols)
+	list_of_pc1_loadings <- lapply(list_of_hitrun_dataframes, get_loadings_for_PC, 1)
+	list_of_pc2_loadings <- lapply(list_of_hitrun_dataframes, get_loadings_for_PC, 2)
+
+	pc1_loadings_at_3_newtons <- list_of_pc1_loadings[[2]]
+	row.names(pc1_loadings_at_3_newtons) <- "pc1_loadings_at_3_newtons"
+	pc1_loadings_at_19_newtons <- list_of_pc1_loadings[[8]]
+	row.names(pc1_loadings_at_19_newtons) <- "pc1_loadings_at_19_newtons"
+	pc1_loadings_at_25_newtons <- list_of_pc1_loadings[[10]]
+	row.names(pc1_loadings_at_25_newtons) <- "pc1_loadings_at_25_newtons"
+	pc2_loadings_at_3_newtons <- list_of_pc2_loadings[[2]]
+	row.names(pc2_loadings_at_3_newtons) <- "pc2_loadings_at_3_newtons"
+	pc2_loadings_at_19_newtons <- list_of_pc2_loadings[[8]]
+	row.names(pc2_loadings_at_19_newtons) <- "pc2_loadings_at_19_newtons"
+	pc2_loadings_at_25_newtons <- list_of_pc2_loadings[[10]]
+	row.names(pc2_loadings_at_25_newtons) <- "pc2_loadings_at_25_newtons"
+
+	pc1_loadings_list <- do.call(rbind, list(
+		pc1_loadings_at_3_newtons,
+		pc1_loadings_at_19_newtons,
+		pc1_loadings_at_25_newtons))
+	pc2_loadings_list <- do.call(rbind, list(
+		pc2_loadings_at_3_newtons,
+		pc2_loadings_at_19_newtons,
+		pc2_loadings_at_25_newtons))
+
+	require(plyr)
+	scaled_pc1_loadings_list <- adply(pc1_loadings_list, 1, function(x) divide_vector_by_max_of_vectors_abs_value(x))
+	scaled_pc2_loadings_list <- adply(pc2_loadings_list, 1, function(x) divide_vector_by_max_of_vectors_abs_value(x))
+	pc1_plot <- pc_loadings_parcoord(scaled_pc1_loadings_list) +
+	 labs(y="Normalized Loading for PC1", x="") +
+	 scale_colour_discrete(name  ="Distal Fingertip Force", labels=c("3.2N", "19.2N", "25.6N")) + ylim(-1.0,1.0)
+	pc2_plot <- pc_loadings_parcoord(scaled_pc2_loadings_list) +
+	labs(x = "Muscle", y="Normalized Loading for PC2")+
+	 scale_colour_discrete(name  ="Distal Fingertip Force", labels=c("3.2N", "19.2N", "25.6N")) +
+	 ylim(-1.0,1)
+
+	combined_plot <- grid.arrange(pc1_plot,pc2_plot, ncol=1)
+	return(combined_plot)
+}
+main()
+```
+
+
+```{r}
+files <- sorted_distal_progression_csv_filename_list()
+list_of_point_matrices <- get_list_of_point_matrices(files, "n_1000_alphalen_1000/")
+force_levels <- do.call("c",lapply(files, extract_force_number_from_filename_string))
+point_matrices_labeled <- lapply(list_of_point_matrices, add_finger_muscle_name_cols)
+```
+
+This R Markdown document is made interactive using Shiny. Unlike the more traditional workflow of creating static reports, you can now create documents that allow your readers to change the assumptions underlying your analysis and see the results immediately. 
+
+To learn more, see [Interactive Documents](http://rmarkdown.rstudio.com/authoring_shiny.html).
+
+## Inputs and Outputs
+
+You can embed Shiny inputs and outputs in your document. Outputs are automatically updated whenever inputs change.  This demonstrates how a standard R plot can be made interactive by wrapping it in the Shiny `renderPlot` function. The `selectInput` and `sliderInput` functions create the input widgets used to drive the plot.
+
+```{r eruptions, echo=FALSE}
+inputPanel(
+  selectInput("muscle", label = "Muscle:",
+              choices = finger_muscle_names_in_order(), selected = "FDP"),
+  
+  sliderInput("forcelevel", label = "Distal Fingertip Force:",
+              min = 1, max = 1000, value = 1, step = 1)
+)
+
+renderPlot({
+  hist(point_matrices_labeled[[input$forcelevel]][,input$muscle], xlim=c(0,1))
+})
+```
+
+```{r, echo=FALSE}
+
+pc1_loadings <- lapply(point_matrices_labeled, get_loadings_for_PC,1, center=FALSE, scale=FALSE)
+pc1_loadings_and_forces<- lapply(1:length(pc1_loadings), function(index) {
+  add_col_with_value(pc1_loadings[[index]], force_levels[index])
+})
+pc1_df <- do.call('rbind', pc1_loadings_and_forces)
+
+
+pc2_loadings <- lapply(point_matrices_labeled, get_loadings_for_PC,2, center=FALSE, scale=FALSE)
+pc2_loadings_and_forces<- lapply(1:length(pc2_loadings), function(index) {
+  add_col_with_value(pc2_loadings[[index]], force_levels[index])
+})
+pc2_df <- do.call('rbind', pc2_loadings_and_forces)
+
+pc3_loadings <- lapply(point_matrices_labeled, get_loadings_for_PC,3, center=FALSE, scale=FALSE)
+pc3_loadings_and_forces<- lapply(1:length(pc3_loadings), function(index) {
+  add_col_with_value(pc3_loadings[[index]], force_levels[index])
+})
+pc3_df <- do.call('rbind', pc3_loadings_and_forces)
+
+
+```
+
+#Make sure the FDP sign is the reference;  FDP is set to always be positive.
+
+#PC1
+```{r, echo=FALSE}
+par(mfrow=c(4,2), mar=rep(0, 4))
+lapply(1:7, function(x) {plot(pc1_df$force, pc1_df[,x], ylim=c(-1,1),main="")})
+```
+
+#PC2
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+par(mfrow=c(4,2), mar=rep(0, 4))
+lapply(1:7, function(x) {plot(pc2_df$force, pc2_df[,x], ylim=c(-1,1),main="")})
+```
+
+#PC3
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+par(mfrow=c(4,2), mar=rep(0, 4))
+lapply(1:7, function(x) {plot(pc3_df$force, pc3_df[,x], ylim=c(-1,1),main="")})
+```
+
+#write fn for plotting loadings for each PC for each muscle
+```{r}
+
+```
+
+#Plot loadings for each PC for each Muscle
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+par(mfrow=c(2,4), mar=rep(1, 4))
+plot_loadings_by_muscle(pc1_df,pc2_df,pc3_df, lwd=2)
+```
+
+#Plot loadings for each PC for each Muscle; with loadings multiplied by FDP's sign across all PCs
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+pdf("pc_loadings_FDP_made_positive.pdf", width=5, height=20)
+par(mfrow=c(7,1), mar=rep(1.5, 4))
+
+pc1_df_FDP <- multiply_rows_by_sign_of_column(pc1_df, 1)
+pc2_df_FDP <- multiply_rows_by_sign_of_column(pc2_df, 1)
+pc3_df_FDP <- multiply_rows_by_sign_of_column(pc3_df, 1)
+
+plot_loadings_by_muscle(pc1_df_FDP,pc2_df_FDP,pc3_df_FDP, lwd=2)
+dev.off()
+```
+
